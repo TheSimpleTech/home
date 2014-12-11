@@ -1,0 +1,33 @@
+#!/bin/sh
+
+#
+# Copyright © 2011 Dell, Inc.
+#
+
+##
+# AMPAgentBootup
+# This SystemStarter script hangs the boot while we wait for AMPAgent to run
+# any "run at boot" scripts
+##
+
+. /etc/rc.common
+
+StartService ()
+{
+    ConsoleMessage "Waiting for AMPAgent Boot Scripts"
+    "${BOOTUPSCRIPT}"
+}
+
+StopService () 
+{
+	:
+}
+
+RestartService ()
+{
+	:
+}
+
+BOOTUPSCRIPT="/Library/Application Support/Dell/KACE/bin/kagentbootupscript"
+
+RunService "$1"

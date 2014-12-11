@@ -1,0 +1,131 @@
+#!/bin/bash
+
+pkg=$1; # full path to the installation package
+dest=$2; # full path to the installation destination
+dest_mnt=$3; # mountpoint of the destination volume
+sys_root=$4; # root directory "/" for the current System folder"
+
+# Snow Leopard 10.6 doesn't seem to pass a 4th param
+if [ "" == "$sys_root" ]; then
+    sys_root="${dest_mnt}"
+fi
+
+KACE_DIR="${sys_root}/Library/Application Support/Dell/KACE"
+AMPTOOLS="${KACE_DIR}/bin/AMPTools"
+AMPHOST=/tmp/amphost.txt
+
+# check for host on command (installer) and set if found (KACE_SERVER)
+mac_version=`sw_vers -productVersion | perl -pe 's/\d+\.(\d+).*/$1/'`
+
+# handle 10.4
+if [ $mac_version -lt 5 ]; then
+	mac_env=`ps -e -p $PPID -ww`;
+# handle 10.5 or greater
+else
+	mac_env=`ps -e -E`;
+fi
+kace_server=`echo $mac_env | perl -ne 's/.*installer\b.*\bKACE_SERVER=(\S+)\b.*/$1/ and print'`;
+
+# Check the amphost file in case someone wrote it.
+if [[ "" == "$kace_server" && -e "${AMPHOST}" ]]; then
+	kace_server=`cat "${AMPHOST}"`
+	rm "${AMPHOST}"
+fi
+
+# Check the a previous 5.2+ config
+if [[ "" == "$kace_server" && -e "${KACE_DIR}/data/amp.conf" ]]; then
+  hostLine=`grep ^host= "${KACE_DIR}/data/amp.conf"`
+  kace_server=${hostLine/host=/}
+fi
+
+# Check the 5.1 config and bring it over
+if [[ "" == "$kace_server" && -e /var/kace/SMMP/SMMP.conf ]]; then
+	hostLine=`grep ^host= /var/kace/SMMP/SMMP.conf`
+	kace_server=${hostLine/host=/}
+fi
+
+# Set the host. Don't start the agent yet.
+if [ "" != "$kace_server" ]; then
+    echo "Setting host=$kace_server"
+	 "$AMPTOOLS" -n host="$kace_server"
+else	
+    echo "Setting host (not provided, scanning config)"
+fi
+
+#setup  the bootup/logon scripts 
+echo Setting startup scripts 
+cp "$pkg/Contents/Resources/kagentbootupscript" \
+   "${KACE_DIR}/bin" 
+cp "$pkg/Contents/Resources/kagentlogonscript" \
+   "${KACE_DIR}/bin" 
+cp "$pkg/Contents/Resources/com.kace.ampagent.plist" \
+   "${sys_root}Library/LaunchDaemons/" 
+cp "$pkg/Contents/Resources/com.kace.AdminAlert.plist" \
+   "${sys_root}Library/LaunchAgents/"
+
+# Install boot process handler
+echo Installing boot process handler
+AMPAGENTBOOTUP_DIR="${sys_root}Library/StartupItems/AMPAgentBootup/"
+mkdir -p "${AMPAGENTBOOTUP_DIR}"
+cp "$pkg/Contents/Resources/StartupParameters.plist" ${AMPAGENTBOOTUP_DIR}
+cp "$pkg/Contents/Resources/AMPAgentBootup"          ${AMPAGENTBOOTUP_DIR}
+
+# If possible, tell launchd to start the AdminAlert LaunchAgent. This will fail on 10.4.
+# Remove the old one first if it happens to still be lying around (we might have been uninstalled)
+# $F[0] is the pid
+# $F[1] is the username
+# $F[2] is the first word of the command
+ps -ww -A -opid,user,command | \
+	perl -nae 'if($F[2] =~ /\bloginwindow\b/) { 
+		system(qq(launchctl bsexec $F[0] su $F[1] -c "launchctl remove com.kace.AdminAlert"));
+		system(qq(launchctl bsexec $F[0] su $F[1] -c "launchctl load -w /Library/LaunchAgents/com.kace.AdminAlert.plist"));
+	 }'
+
+# Backup defaults settings before modifying
+date >> "${KACE_DIR}/bin/defaults_loginwindow.bak"
+defaults read com.apple.loginwindow >> \
+   "${KACE_DIR}/bin/defaults_loginwindow.bak"
+
+# set the logon script to run at logon
+defaults write com.apple.loginWindow LoginHook \
+   "${KACE_DIR}/bin/kagentlogonscript"
+
+# Install smbclient from 10.4 in case we need it (10.7+)
+if [ -f "${KACE_DIR}/bin/kace_smbclient.tar.gz" ]; then
+    tar zxf "${KACE_DIR}/bin/kace_smbclient.tar.gz" -C "${KACE_DIR}/bin"
+fi
+
+# make sure the bin dir is accessible for the alert app
+chmod 755 "${KACE_DIR}" 
+chmod 755 "${KACE_DIR}/bin"
+
+# remove 5.1 agent references - delete actual 5.1 agent below
+rm -rf ${sys_root}Library/StartupItems/KBOXAgent
+rm -f ${sys_root}Library/LaunchDaemons/kace.smmpagent.bootup.plist
+
+# remove 5.3 agent references
+rm -rf ${sys_root}Library/StartupItems/AMPAgent
+rm -f ${sys_root}Library/LaunchDaemons/kace.ampagent.bootup.plist
+rm -rf "${KACE_DIR}/lib-darwin-10.4-*"
+#
+# remove old smbclient script used in 5.3 but no longer needed
+#
+if [ -f /usr/bin/smbclient ]; then
+    file /usr/bin/smbclient | grep "shell script" && 
+        grep __xx_KaceMntPnt_xx__ /usr/bin/smbclient && rm /usr/bin/smbclient
+fi
+
+# Start the agent
+echo starting AMPAgent
+"$AMPTOOLS" start
+
+# Remove the old KBOXAgent directory. Don't delete it yet; we're inside of it if it exists.
+# It'll be deleted next reboot.
+PRE52="${sys_root}Library/KBOXAgent"
+if [ -d $PRE52 ]; then
+    ARCHIVE="$TMPDIR/KBOXAgent.$$"
+    echo "Archiving old KBOX to $ARCHIVE"
+    mv "$PRE52" "$ARCHIVE"
+fi
+
+exit 0

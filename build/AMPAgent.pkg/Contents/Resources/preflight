@@ -1,0 +1,34 @@
+#!/bin/bash
+
+pkg=$1; # full path to the installation package
+dest=$2; # full path to the installation destination
+dest_mnt=$3; # mountpoint of the destination volume
+sys_root=$4; # root directory "/" for the current System folder"
+
+# Snow Leopard 10.6 doesn't seem to pass a 4th param
+if [ "" == "$sys_root" ]; then
+    sys_root="${dest_mnt}"
+fi
+
+## Stop the agent every way we've ever used
+
+# kill KBOXAgent (5.1)
+echo stopping KBOXAgent
+SystemStarter stop KBOXAgent || true
+
+# kill AMPAgent (5.3)
+echo stopping AMPAgent
+SystemStarter stop AMPAgent || true
+
+### # unload AMPAgent's LaunchDaemon (5.4+)
+"/Library/Application Support/Dell/KACE/bin/AMPctl" stop || true
+
+### # Manually unload the LaunchDaemons (and make them stay unloaded)
+launchctl unload -w /Library/LaunchDaemons/com.kace.ampagent.plist || true
+launchctl unload -w /Library/LaunchDaemons/kace.ampagent.bootup.plist || true
+
+# One last shot, just in case. This won't shutdown a daemon, and it doesn't allow cleanup.
+killall -9 'AMPAgent' || true
+killall -9 'AdminAlert' || true
+
+exit 0

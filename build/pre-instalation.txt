@@ -1,0 +1,41 @@
+#!/bin/sh
+# Kace Remover for 5.1 and 5.3 from http://derflounder.wordpress.com
+# Removes the 5.1 KBox agent
+sudo /Library/StartupItems/KBOXAgent/KBOXAgent stop
+sudo /Library/KBOXAgent/Home/bin/kagentctl stop 2>&1
+sudo /Library/KBOXAgent/Home/bin/SMMPctl stop 2>&1
+sudo rm -rf /Library/KBOXAgent
+sudo rm -rf /Library/StartupItems/KBOXAgent
+sudo rm -rf /Library/Receipts/KBOX\ Agent.pkg
+sudo rm -rf /var/kace
+sudo rm -rf /var/db/receipts/com.kace.kboxagent.bom
+sudo rm -rf /var/db/receipts/com.kace.kboxagent.plist
+sudo rm -rf /Library/LaunchDaemons/kace.smmpagent.bootup.plist
+
+# Removes the 5.3 or 5.5 KBox agent
+sudo /Library/StartupItems/AMPAgentBootup/AMPAgentBootup stop
+sudo /Library/Application/ Support/Dell/KACE/bin/AMPctl stop 2>&1
+sudo /Library/Application/ Support/Dell/KACE/bin/kagentctl stop 2>&1
+sudo rm -rf /Library/Application/ Support/Dell
+sudo rm -rf /Library/StartupItems/AMPAgentBootup
+sudo rm -rf /Library/Receipts/AMPAgent.pkg
+sudo rm -rf /var/db/receipts/com.kace.ampagent.bom
+sudo rm -rf /var/db/receipts/com.kace.ampagent.plist
+sudo rm -rf /Library/LaunchAgents/com.kace.AdminAlert.plist
+sudo rm -rf /Library/LaunchDaemons/com.kace.ampagent.plist
+
+# Install 5.5.904 KBox agent and adds kace1000.k1.name and runkbot
+    
+mkdir -p "/Library/Application Support/Dell/KACE/"
+sleep 15
+sh -c 'KACE_SERVER=k1000.ciber.com installer -pkg AMPAgent.pkg -target /'
+
+< <'KBOT'
+tell application "Terminal.app"
+	activate
+	delay 0.5
+	do shell script sudo("/Library/Application Support/Dell/KACE/bin/runkbot 1 0")
+	delay 1
+	do shell script sudo("/Library/Application Support/Dell/KACE/bin/runkbot 2 0")
+end tell
+KBOT

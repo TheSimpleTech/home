@@ -1,0 +1,162 @@
+#!/usr/bin/perl
+#
+# Copyright © 2011 Dell, Inc.
+#
+# This script hangs until AMPAgent can run any "run at boot" or "run at login" 
+# scripts, based on its name ("kagentbootupscript" or "kagentlogonscript").
+#
+# As kagentbootupscript, this script will be run by SystemStarter
+# (/Library/StartupItems/AMPAgentBootup).
+#
+# As kagentlogonscript, this script will be launched as a LoginWindow Script
+#   Install
+#     sudo defaults write com.apple.loginWindow LoginHook "/Library/Application Support/Dell/KACE/bin/kagentlogonscript"
+#   Uninstall
+#     sudo defaults delete com.apple.loginWindow LoginHook
+#
+# AMPAgent should already have been launched by launchd before this runs.
+# AMPAgent is responsible for creating all FIFOs. This script unlinks the status
+# FIFO.
+#    _kagent_${mode}_event - To AMPAgent
+#    _kagent_${mode}_event_status - From AMPAgent
+#
+# Set KACE_AGENTSCRIPT_DEBUG in the environment to turn on debugging. Logs and
+# FIFOs will be written to the current directory. TOTAL_TIMEOUT is set to 20s.
+#
+# This script always runs as root.
+
+use strict;
+use File::Basename qw(basename);
+
+#
+# Constants
+#
+my $DEBUG = $ENV{'KACE_AGENTSCRIPT_DEBUG'};
+my $DATA_DIR = $DEBUG ? '.' :
+                '/Library/Application Support/Dell/KACE/data'; # AMP data dir
+my $TOTAL_TIMEOUT = $DEBUG ? 20
+                           : 5 * 60; # 5 minutes total run time
+my $FIFO_TIMEOUT = 10;  # 10 seconds to wait for FIFOs to be created
+
+##############################################################################
+
+sub log_msg
+{
+    my ($msg) = @_;
+    
+    print LOGFILE "[" . scalar(localtime), "] ", @_, "\n";
+}
+
+sub safe_sleep
+{
+    # sleep() isn't safe while an alarm() is running
+    my ($timeout) = @_;
+    select(undef, undef, undef, $timeout)
+}
+
+sub assert_FIFO
+{
+    my ($fifo) = @_;
+    
+    my $timeout;
+    for ($timeout = $FIFO_TIMEOUT; $timeout > 0; --$timeout)
+    {
+        last if -e $fifo;
+        log_msg "WARNING: No fifo (${fifo}) ... waiting ... \n";
+        safe_sleep(1);
+    }
+
+    if ($timeout <= 0)
+    {
+        log_msg "ERROR: Timed out looking for fifo (but AMPAgent is running).\n";
+        exit(1);
+    }
+    
+    if (! -p $fifo)
+    {
+        log_msg "ERROR: FIFO is not a FIFO (${fifo})\n";
+        exit(1);
+    }
+}
+
+##############################################################################
+
+#Turn off buffering (just in case)
+$|++;
+
+# After $TOTAL_TIMEOUT seconds, no matter what, proceed with logon/boot
+local $SIG{ALRM} = sub { 
+    log_msg "ERROR: Script timed out ... exiting\n";
+    exit(1);
+};
+alarm($TOTAL_TIMEOUT);
+
+# Determine current mode
+my $mode;   # Used in path names, uc($mode) is sent to FIFO
+my $script_name = basename($0);
+if ($script_name eq "kagentbootupscript")
+{
+    $mode = "bootup";
+}
+elsif ($script_name eq "kagentlogonscript" )
+{
+    $mode = "logon";
+}
+else
+{
+    die "Unknown mode: ", $script_name, "\n";
+}
+
+# Setup script-specific paths
+my $status_path = "${DATA_DIR}/_kagent_${mode}_event_status";
+my $event_path = "${DATA_DIR}/_kagent_${mode}_event";
+
+# open a log file 
+open(LOGFILE, ">>", "${DATA_DIR}/${script_name}.log")
+    or die "Failed to open the log file : $!";
+
+log_msg "Starting";
+log_msg "Debug on" if $DEBUG;
+
+# Make sure AMPAgent is running
+if(system("killall -0 AMPAgent > /dev/null 2>&1") != 0)
+{
+    log_msg "WARNING: AMPAgent is not running ... exiting";
+    exit(1);
+}
+
+# Wait for AMPAgent to create the event FIFO
+assert_FIFO($event_path);
+
+# Send message
+log_msg "Writing to the event fifo";
+open(EVENTFIFO, ">", $event_path) or die "Failed to open the event fifo for writing";
+print EVENTFIFO uc($mode);
+close(EVENTFIFO);
+
+# Give the agent a little time to respond, this will save a 1s wait in assert_FIFO
+# Increase this timeout if you see "No fifo" warnings in the logs
+safe_sleep(.1);
+
+# Wait for AMPAgent to create the status FIFO. This verifies we were heard. If
+# we weren't, we'll bail much faster ($FIFO_TIMEOUT rather than $TOTAL_TIMEOUT),
+# so don't be tempted to mkfifo here.
+assert_FIFO($status_path);
+
+# Wait for DONE message
+log_msg "Reading from the status fifo";
+open(STATUSFIFO, "<", $status_path) or die "Failed to open the status fifo for read";
+while(my $line = <STATUSFIFO>)
+{
+    if($line =~ /DONE/)
+    {
+        last;
+    }
+}
+close(STATUSFIFO);
+
+#delete the status fifo
+unlink($status_path);
+
+log_msg "Exiting";
+exit(0);

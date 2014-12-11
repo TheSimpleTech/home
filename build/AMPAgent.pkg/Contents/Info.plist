@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleGetInfoString</key>
+	<string>5.4, © 2009-2011 Dell Inc.</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.kace.ampagent</string>
+	<key>CFBundleShortVersionString</key>
+	<string>5.4</string>
+	<key>IFMajorVersion</key>
+	<integer>0</integer>
+	<key>IFMinorVersion</key>
+	<integer>1</integer>
+	<key>IFPkgFlagAllowBackRev</key>
+	<false/>
+	<key>IFPkgFlagAuthorizationAction</key>
+	<string>RootAuthorization</string>
+	<key>IFPkgFlagBackgroundAlignment</key>
+	<string>right</string>
+	<key>IFPkgFlagBackgroundScaling</key>
+	<string>none</string>
+	<key>IFPkgFlagDefaultLocation</key>
+	<string>/Library/Application Support/Dell/KACE</string>
+	<key>IFPkgFlagFollowLinks</key>
+	<true/>
+	<key>IFPkgFlagInstallFat</key>
+	<false/>
+	<key>IFPkgFlagInstalledSize</key>
+	<integer>26000</integer>
+	<key>IFPkgFlagIsRequired</key>
+	<false/>
+	<key>IFPkgFlagOverwritePermissions</key>
+	<false/>
+	<key>IFPkgFlagRelocatable</key>
+	<false/>
+	<key>IFPkgFlagRestartAction</key>
+	<string>NoRestart</string>
+	<key>IFPkgFlagRootVolumeOnly</key>
+	<false/>
+	<key>IFPkgFlagUpdateInstalledLanguages</key>
+	<false/>
+	<key>IFPkgFormatVersion</key>
+	<real>0.10000000149011611</real>
+	<key>IFRequirementDicts</key>
+	<array>
+		<dict>
+			<key>LabelKey</key>
+			<string>Requires Mac OS X 10.4+</string>
+			<key>Level</key>
+			<string>requires</string>
+			<key>SpecArgument</key>
+			<string>/System/Library/CoreServices/SystemVersion.plist</string>
+			<key>SpecProperty</key>
+			<string>ProductVersion</string>
+			<key>SpecType</key>
+			<string>plist</string>
+			<key>TestObject</key>
+			<string>10.4</string>
+			<key>TestOperator</key>
+			<string>&gt;=</string>
+		</dict>
+	</array>
+</dict>
+</plist>
